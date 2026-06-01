@@ -12,11 +12,17 @@ Klik tombol di bawah ini untuk men-deploy proxy ini langsung ke akun Cloudflare 
 
 ## ⚙️ Konfigurasi Environment Variables
 
-Setelah deploy berhasil, buka dashboard Cloudflare Worker Anda, masuk ke menu **Settings** -> **Variables**, lalu tambahkan dua variabel berikut:
+Setelah deploy berhasil, ikuti langkah visual di bawah ini untuk memasukkan konfigurasi:
 
-1. **`DISCORD_WEBHOOK_URL`** (Secret)
-   * **Deskripsi:** URL Webhook Discord saluran tujuan Anda.
-2. **`MAPGUARD_KEY`** (Secret)
-   * **Deskripsi:** API Key rahasia pilihan Anda untuk otentikasi request dari modul server Roblox.
+1. Buka dashboard Cloudflare Worker Anda, pilih worker Anda, lalu klik tab **Settings** di kanan atas dan klik tombol **+ Add** pada bagian Variables:
+   ![Cloudflare Settings Tab](assets/cloudflare_settings.png)
+
+2. Masukkan dua variabel berikut (pilih tipe **Secret**):
+   * **`DISCORD_WEBHOOK_URL`**
+     * **Deskripsi:** URL Webhook Discord saluran tujuan Anda.
+   * **`MAPGUARD_KEY`**
+     * **Deskripsi:** API Key rahasia pilihan Anda untuk otentikasi request dari modul server Roblox.
+
+   ![Cloudflare Variables Setup](assets/cloudflare_variables.png)
 
 Klik **Save and Deploy** setelah menambahkan kedua variabel tersebut. Salin URL Worker Anda (misal: `https://mapguard-proxy.username.workers.dev/v1/alerts`) dan masukkan ke dalam konfigurasi modul Roblox `Config.lua`.
