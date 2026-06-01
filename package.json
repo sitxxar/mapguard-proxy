@@ -1,0 +1,15 @@
+{
+  "name": "mapguard-proxy",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers proxy for MapGuard Roblox Security Webhook System",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240529.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.57.2"
+  }
+}

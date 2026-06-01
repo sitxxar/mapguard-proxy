@@ -1,0 +1,11 @@
+name = "mapguard-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-05-29"
+
+# API Key dan Discord Webhook harus diset sebagai Secrets di Cloudflare Dashboard atau via CLI:
+# wrangler secret put MAPGUARD_KEY
+# wrangler secret put DISCORD_WEBHOOK_URL
+
+[vars]
+# Variabel non-sensitif jika ada bisa diletakkan di sini
+ENVIRONMENT = "production"
