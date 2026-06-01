@@ -23,10 +23,10 @@ Follow these steps to deploy your proxy in under a minute without using any comm
 [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sitxxar/mapguard-proxy)
 
 2. If prompted to sign in to Cloudflare, select **GitHub** to sign in:
-   ![Cloudflare Sign in with GitHub](assets/cloudflare_login.png)
+   ![Cloudflare Sign in with GitHub](assets/cloudflare_login_v2.png)
 
 3. Under **Git account**, click the dropdown and select **+ New GitHub Connection** to link your GitHub profile. Once authorized, select your username and click the blue **Deploy** button:
-   ![Cloudflare GitHub Connection Setup](assets/cloudflare_github_connection.png)
+   ![Cloudflare GitHub Connection Setup](assets/cloudflare_github_connection_v2.png)
 
 4. Wait about 10-15 seconds for Cloudflare to fork the repository and deploy the worker.
 
