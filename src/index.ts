@@ -34,7 +34,7 @@ export default {
       });
     }
 
-    // Hanya terima POST ke /v1/alerts
+    // Only allow POST requests to /v1/alerts
     if (request.method !== "POST" || url.pathname !== "/v1/alerts") {
       return new Response(JSON.stringify({ error: "Method not allowed or invalid path" }), {
         status: 405,
@@ -42,7 +42,7 @@ export default {
       });
     }
 
-    // 1. Validasi API Key
+    // 1. Validate API Key
     const requestApiKey = request.headers.get("X-MapGuard-Key");
     if (!env.MAPGUARD_KEY) {
       return new Response(JSON.stringify({ error: "Proxy configuration error: MAPGUARD_KEY not set" }), {
@@ -58,7 +58,7 @@ export default {
       });
     }
 
-    // 2. Validasi Webhook Discord
+    // 2. Validate Discord Webhook URL
     if (!env.DISCORD_WEBHOOK_URL) {
       return new Response(JSON.stringify({ error: "Proxy configuration error: DISCORD_WEBHOOK_URL not set" }), {
         status: 500,
@@ -75,11 +75,11 @@ export default {
         });
       }
 
-      // 3. Proses & Agregasi Logs ke Embeds Discord
+      // 3. Process & Aggregate Logs into Discord Embeds
       const embeds = [];
       const now = new Date();
 
-      // Kelompokkan logs untuk menghindari duplikasi visual jika player melakukan hal yang sama berkali-kali
+      // Group logs to prevent visual duplication if a player triggers the same event repeatedly
       const aggregatedLogs: { [key: string]: RobloxLog & { count: number } } = {};
 
       for (const log of payload.logs) {
@@ -91,7 +91,7 @@ export default {
         }
       }
 
-      // Bangun Discord Embeds dari data ter-agregasi
+      // Build Discord Embeds from aggregated data
       for (const key of Object.keys(aggregatedLogs)) {
         const item = aggregatedLogs[key];
         
@@ -105,7 +105,7 @@ export default {
           levelEmoji = "🚨";
         }
 
-        const countText = item.count > 1 ? ` (Terdeteksi ${item.count}x)` : "";
+        const countText = item.count > 1 ? ` (Detected ${item.count}x)` : "";
         const playerProfileUrl = `https://www.roblox.com/users/${item.player.userId}/profile`;
 
         embeds.push({
@@ -123,8 +123,8 @@ export default {
               inline: true
             },
             {
-              name: "📋 Detail Kejadian",
-              value: item.details || "Tidak ada detail tambahan.",
+              name: "📋 Event Details",
+              value: item.details || "No additional details provided.",
               inline: false
             }
           ],
@@ -133,11 +133,11 @@ export default {
           }
         });
 
-        // Limit embeds Discord maksimal 10 per message payload
+        // Limit Discord embeds to a maximum of 10 per message payload
         if (embeds.length >= 10) break;
       }
 
-      // 4. Kirim ke Discord Webhook
+      // 4. Send to Discord Webhook
       const discordResponse = await fetch(env.DISCORD_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
