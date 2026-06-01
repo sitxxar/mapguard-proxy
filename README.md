@@ -25,4 +25,7 @@ Setelah deploy berhasil, ikuti langkah visual di bawah ini untuk memasukkan konf
 
    ![Cloudflare Variables Setup](assets/cloudflare_variables.png)
 
-Klik **Save and Deploy** setelah menambahkan kedua variabel tersebut. Salin URL Worker Anda (misal: `https://mapguard-proxy.username.workers.dev/v1/alerts`) dan masukkan ke dalam konfigurasi modul Roblox `Config.lua`.
+3. Setelah menyimpan variabel, kembali ke tab **Overview** di menu atas dan salin URL Worker Anda:
+   ![Cloudflare Worker URL in Overview](assets/cloudflare_overview.png)
+
+Klik **Save and Deploy** setelah menambahkan kedua variabel tersebut. Salin URL Worker Anda (misal: `https://mapguard-proxy.username.workers.dev/v1/alerts` dari tab Overview) dan masukkan ke dalam konfigurasi modul Roblox `Config.lua`.
