@@ -6,7 +6,7 @@ Middleware proxy untuk game Roblox yang menerima log batch keamanan dan menerusk
 
 Klik tombol di bawah ini untuk men-deploy proxy ini langsung ke akun Cloudflare Anda secara gratis:
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/YOUR_GITHUB_USERNAME/mapguard-proxy)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/sitxxar/mapguard-proxy)
 
 ---
 
