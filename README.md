@@ -6,7 +6,7 @@ A secure, rate-limit resilient middleware proxy for Roblox game experiences. It 
 
 Here is a visual example of how MapGuard bundles alerts in your Discord channel:
 
-![MapGuard Discord Alert Demo](assets/discord_alert.png)
+![MapGuard Discord Alert Demo](assets/demo.png)
 
 ## 🚀 1-Click Deploy to Cloudflare Workers
 
