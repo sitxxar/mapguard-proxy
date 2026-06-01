@@ -2,6 +2,12 @@
 
 Middleware proxy untuk game Roblox yang menerima log batch keamanan dan meneruskannya ke webhook Discord secara aman tanpa terkena rate limit.
 
+## 📺 Demo Alert Discord
+
+Berikut adalah contoh visual alert yang dikirimkan oleh MapGuard ke channel Discord Anda secara terintegrasi (batch & de-duplikasi otomatis):
+
+![MapGuard Discord Alert Demo](assets/discord_alert.png)
+
 ## 🚀 1-Click Deploy to Cloudflare Workers
 
 Klik tombol di bawah ini untuk men-deploy proxy ini langsung ke akun Cloudflare Anda secara gratis:
