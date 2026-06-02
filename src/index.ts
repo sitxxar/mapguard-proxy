@@ -3,9 +3,11 @@ export interface Env {
   DISCORD_WEBHOOK_URL?: string;
 }
 
+type AlertLevel = "INFO" | "WARNING" | "CRITICAL";
+
 interface RobloxLog {
   timestamp: number;
-  level: "INFO" | "WARNING" | "CRITICAL";
+  level: AlertLevel;
   player: {
     userId: number;
     username: string;
@@ -18,150 +20,194 @@ interface AlertRequestPayload {
   logs: RobloxLog[];
 }
 
+const MAX_BODY_BYTES = 64 * 1024;
+const MAX_LOGS_PER_REQUEST = 25;
+const MAX_REASON_LENGTH = 180;
+const MAX_DETAILS_LENGTH = 900;
+const MAX_USERNAME_LENGTH = 32;
+const DISCORD_MAX_EMBEDS = 10;
+const VALID_LEVELS = new Set<AlertLevel>(["INFO", "WARNING", "CRITICAL"]);
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function normalizeString(value: unknown, fallback: string, maxLength: number): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  return truncate(trimmed, maxLength);
+}
+
+function normalizeLog(value: unknown): RobloxLog | null {
+  if (!isRecord(value)) return null;
+
+  const player = value.player;
+  if (!isRecord(player)) return null;
+
+  const userId = player.userId;
+  if (typeof userId !== "number" || !Number.isInteger(userId) || userId < 0) {
+    return null;
+  }
+
+  const rawLevel = value.level;
+  const level = typeof rawLevel === "string" && VALID_LEVELS.has(rawLevel as AlertLevel)
+    ? rawLevel as AlertLevel
+    : null;
+  if (!level) return null;
+
+  const timestamp = typeof value.timestamp === "number" && Number.isFinite(value.timestamp)
+    ? Math.floor(value.timestamp)
+    : Math.floor(Date.now() / 1000);
+
+  return {
+    timestamp,
+    level,
+    player: {
+      userId,
+      username: normalizeString(player.username, "Unknown", MAX_USERNAME_LENGTH),
+    },
+    reason: normalizeString(value.reason, "Unspecified security event", MAX_REASON_LENGTH),
+    details: normalizeString(value.details, "No additional details provided.", MAX_DETAILS_LENGTH),
+  };
+}
+
+async function parseAlertPayload(request: Request): Promise<AlertRequestPayload | null> {
+  const contentLength = Number(request.headers.get("Content-Length") || 0);
+  if (contentLength > MAX_BODY_BYTES) return null;
+
+  const rawBody = await request.text();
+  if (new TextEncoder().encode(rawBody).length > MAX_BODY_BYTES) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(parsed) || !Array.isArray(parsed.logs)) return null;
+  if (parsed.logs.length === 0 || parsed.logs.length > MAX_LOGS_PER_REQUEST) return null;
+
+  const logs = parsed.logs.map(normalizeLog);
+  if (logs.some((log) => log === null)) return null;
+
+  return { logs: logs as RobloxLog[] };
+}
+
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // Endpoint health check
     if (request.method === "GET" && url.pathname === "/health") {
-      return new Response(JSON.stringify({ status: "ok", service: "MapGuard Proxy" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse({ status: "ok", service: "MapGuard Proxy" });
     }
 
-    // Only allow POST requests to /v1/alerts
     if (request.method !== "POST" || url.pathname !== "/v1/alerts") {
-      return new Response(JSON.stringify({ error: "Method not allowed or invalid path" }), {
-        status: 405,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Method not allowed or invalid path" }, 405);
     }
 
-    // 1. Validate API Key
+    if (!request.headers.get("Content-Type")?.toLowerCase().includes("application/json")) {
+      return jsonResponse({ error: "Bad Request: Content-Type must be application/json" }, 400);
+    }
+
     const requestApiKey = request.headers.get("X-MapGuard-Key");
     if (!env.MAPGUARD_KEY) {
-      return new Response(JSON.stringify({ error: "Proxy configuration error: MAPGUARD_KEY not set" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Proxy configuration error: MAPGUARD_KEY not set" }, 500);
     }
 
     if (requestApiKey !== env.MAPGUARD_KEY) {
-      return new Response(JSON.stringify({ error: "Unauthorized: Invalid API Key" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Unauthorized: Invalid API Key" }, 401);
     }
 
-    // 2. Validate Discord Webhook URL
     if (!env.DISCORD_WEBHOOK_URL) {
-      return new Response(JSON.stringify({ error: "Proxy configuration error: DISCORD_WEBHOOK_URL not set" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Proxy configuration error: DISCORD_WEBHOOK_URL not set" }, 500);
     }
 
-    try {
-      const payload: AlertRequestPayload = await request.json();
-      if (!payload.logs || !Array.isArray(payload.logs) || payload.logs.length === 0) {
-        return new Response(JSON.stringify({ error: "Bad Request: 'logs' must be a non-empty array" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      // 3. Process & Aggregate Logs into Discord Embeds
-      const embeds = [];
-      const now = new Date();
-
-      // Group logs to prevent visual duplication if a player triggers the same event repeatedly
-      const aggregatedLogs: { [key: string]: RobloxLog & { count: number } } = {};
-
-      for (const log of payload.logs) {
-        const uniqueKey = `${log.player.userId}-${log.level}-${log.reason}`;
-        if (aggregatedLogs[uniqueKey]) {
-          aggregatedLogs[uniqueKey].count += 1;
-        } else {
-          aggregatedLogs[uniqueKey] = { ...log, count: 1 };
-        }
-      }
-
-      // Build Discord Embeds from aggregated data
-      for (const key of Object.keys(aggregatedLogs)) {
-        const item = aggregatedLogs[key];
-        
-        let color = 5814783; // Blue (Default INFO)
-        let levelEmoji = "ℹ️";
-        if (item.level === "WARNING") {
-          color = 16756224; // Orange/Yellow
-          levelEmoji = "⚠️";
-        } else if (item.level === "CRITICAL") {
-          color = 16711680; // Red
-          levelEmoji = "🚨";
-        }
-
-        const countText = item.count > 1 ? ` (Detected ${item.count}x)` : "";
-        const playerProfileUrl = `https://www.roblox.com/users/${item.player.userId}/profile`;
-
-        embeds.push({
-          title: `${levelEmoji} MapGuard Alert: ${item.reason}${countText}`,
-          color: color,
-          fields: [
-            {
-              name: "👤 Player",
-              value: `[${item.player.username}](${playerProfileUrl})`,
-              inline: true
-            },
-            {
-              name: "🆔 User ID",
-              value: `\`${item.player.userId}\``,
-              inline: true
-            },
-            {
-              name: "📋 Event Details",
-              value: item.details || "No additional details provided.",
-              inline: false
-            }
-          ],
-          footer: {
-            text: `MapGuard Security System • ${now.toISOString()}`
-          }
-        });
-
-        // Limit Discord embeds to a maximum of 10 per message payload
-        if (embeds.length >= 10) break;
-      }
-
-      // 4. Send to Discord Webhook
-      const discordResponse = await fetch(env.DISCORD_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ embeds: embeds })
-      });
-
-      if (!discordResponse.ok) {
-        const errorText = await discordResponse.text();
-        return new Response(JSON.stringify({ error: `Discord Webhook error: ${errorText}` }), {
-          status: discordResponse.status,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(JSON.stringify({ success: true, processedAlerts: payload.logs.length }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-
-    } catch (err: any) {
-      return new Response(JSON.stringify({ error: `Server Error: ${err.message || err}` }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      });
+    const payload = await parseAlertPayload(request);
+    if (!payload) {
+      return jsonResponse({ error: "Bad Request: invalid or oversized logs payload" }, 400);
     }
+
+    const embeds = [];
+    const now = new Date();
+    const aggregatedLogs: Record<string, RobloxLog & { count: number }> = {};
+
+    for (const log of payload.logs) {
+      const uniqueKey = `${log.player.userId}-${log.level}-${log.reason}`;
+      if (aggregatedLogs[uniqueKey]) {
+        aggregatedLogs[uniqueKey].count += 1;
+      } else {
+        aggregatedLogs[uniqueKey] = { ...log, count: 1 };
+      }
+    }
+
+    for (const key of Object.keys(aggregatedLogs)) {
+      const item = aggregatedLogs[key];
+      let color = 5814783;
+      let levelLabel = "INFO";
+
+      if (item.level === "WARNING") {
+        color = 16756224;
+        levelLabel = "WARNING";
+      } else if (item.level === "CRITICAL") {
+        color = 16711680;
+        levelLabel = "CRITICAL";
+      }
+
+      const countText = item.count > 1 ? ` (Detected ${item.count}x)` : "";
+      const playerProfileUrl = `https://www.roblox.com/users/${item.player.userId}/profile`;
+
+      embeds.push({
+        title: truncate(`[${levelLabel}] MapGuard Alert: ${item.reason}${countText}`, 256),
+        color,
+        fields: [
+          {
+            name: "Player",
+            value: `[${item.player.username}](${playerProfileUrl})`,
+            inline: true,
+          },
+          {
+            name: "User ID",
+            value: `\`${item.player.userId}\``,
+            inline: true,
+          },
+          {
+            name: "Event Details",
+            value: truncate(item.details || "No additional details provided.", 1024),
+            inline: false,
+          },
+        ],
+        footer: {
+          text: truncate(`MapGuard Security System - ${now.toISOString()}`, 2048),
+        },
+      });
+
+      if (embeds.length >= DISCORD_MAX_EMBEDS) break;
+    }
+
+    const discordResponse = await fetch(env.DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ embeds }),
+    });
+
+    if (!discordResponse.ok) {
+      return jsonResponse({ error: "Discord Webhook delivery failed" }, 502);
+    }
+
+    return jsonResponse({ success: true, processedAlerts: payload.logs.length });
   },
 };
